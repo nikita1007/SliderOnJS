@@ -1,4 +1,4 @@
-import N_Slider from "/Slider.js";
+import N_Slider from "./Slider.js";
 
 const Slider = document.querySelector(".slider");
 const SliderBtnToLeft = document.querySelector(
