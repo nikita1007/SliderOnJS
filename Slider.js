@@ -1,293 +1,158 @@
-export default class N_Slider {
-  constructor(object, settings) {
-    this.SliderObject = object;
-    this.SwitchBtns = {
-      btnLeft: settings.switchBtns.btnLeft,
-      btnRight: settings.switchBtns.btnRight,
-    };
-    this.BreakPoints = settings.breakpoints;
-
-    this.SlidesOffset;
-
-    this.CountOfShowSlides;
-
-    this.SlidesTransition =
-      parseFloat(
-        window
-          .getComputedStyle(
-            this.SliderObject.querySelector(".slider__inner"),
-            null
-          )
-          .getPropertyValue("transition")
-          .match(/[0-9]+\.[0-9]+/)
-      ) * 1000;
-
-    // Устанавливаем размер слайдов при resize-е и при загрузке страницы
-    this.main();
-
-    // Скролл при нажатии на кнопки
-    this.isEvent = false;
-
-    // Переменная проверяющая, был ли скролл после загрузки страницы
-    this.isScrollable = false;
-
-    this.SwitchBtns.btnLeft.onclick = () => {
-      if (this.isEvent) return;
-      this.SlidesOffset++;
-      console.log(this.SlidesOffset);
-      this.ScrollSlides();
-      this.setActiveClasses();
-      this.SliderObject.querySelector(
-        ".slides > .slider__inner"
-      ).ontransitionend = () => {
-        this.SwitchFromCloneSlides();
-        this.isEvent = false
-      };
-    };
-    this.SwitchBtns.btnRight.onclick = () => {
-      if (this.isEvent) return;
-      this.SlidesOffset--;
-      this.ScrollSlides();
-      this.setActiveClasses();
-      this.SliderObject.querySelector(
-        ".slides > .slider__inner"
-      ).ontransitionend = () => {
-        this.SwitchFromCloneSlides();
-        this.isEvent = false
-      };
-    };
-
-    // Свайп слайдов
-    this.SliderObject.querySelector(".slides").addEventListener(
-      "touchstart",
-      this.SwipeSlidesStart.bind(this)
-    );
-    this.SliderObject.querySelector(".slides").addEventListener(
-      "touchmove",
-      this.SwipeSlides.bind(this)
-    );
-    this.SliderObject.querySelector(".slides").addEventListener(
-      "touchend",
-      () => {
-        this.SwipeSlidesEnd();
-        this.setActiveClasses();
-        this.SliderObject.querySelector(
-          ".slides > .slider__inner"
-        ).ontransitionend = () => {
-          this.SwitchFromCloneSlides();
-          this.isEvent = false;
-        };
+export default function N_Slider(object, settings) {
+  // Объект слайдера
+  const SliderObject = object;
+  const SliderInner = SliderObject.querySelector(".slider__inner");
+  const SlidesList = SliderObject.querySelectorAll(".slide");
+  // настройки по слайдеру
+  // Кнопки
+  const SwitchBtns = {
+    btnLeft: settings.switchBtns.btnLeft,
+    btnRight: settings.switchBtns.btnRight,
+  };
+  // Брекпоинты
+  const BreakPoints = settings.breakpoints;
+  // Анимация
+  const SliderTransition = settings.transition;
+  const SliderTransitionString = `transform ${SliderTransition.seconds}ms ${
+    SliderTransition.timing ? SliderTransition.timing : ""
+  }`;
+  // Offset Слайдов
+  const def = {
+    sliderOffset: 0,
+    showSlidesCount: function () {
+      let SliderBreakPointsKeys = [];
+      let showSlides;
+      for (let i = 0; i < Object.keys(BreakPoints).length; i++) {
+        if (Object.keys(BreakPoints)[i].match(/\d+/)) {
+          SliderBreakPointsKeys.push(parseInt(Object.keys(BreakPoints)[i]));
+        }
       }
-    );
-  }
-
-  main() {
-    window.addEventListener("load", () => {
-      this.setSlideSize();
-      this.cloneSlides();
-      this.setActiveClasses();
-      this.SwitchFromCloneSlides();
-    });
-    window.addEventListener("resize", () => {
-      this.setSlideSize();
-      this.cloneSlides();
-      this.setActiveClasses();
-      this.SwitchFromCloneSlides();
-    });
-  }
-
-  setSlideSize() {
-    let SliderBreakPointsKeys = [];
-
-    for (let i = 0; i < Object.keys(this.BreakPoints).length; i++) {
-      if (Object.keys(this.BreakPoints)[i].match(/\d+/)) {
-        SliderBreakPointsKeys.push(parseInt(Object.keys(this.BreakPoints)[i]));
+      SliderBreakPointsKeys = SliderBreakPointsKeys.reverse();
+      for (let i = 0; i < SliderBreakPointsKeys.length; i++) {
+        if (SliderBreakPointsKeys[i] >= window.innerWidth) {
+          showSlides = BreakPoints[SliderBreakPointsKeys[i]].showSlidesCount;
+        }
       }
-    }
-    SliderBreakPointsKeys = SliderBreakPointsKeys.reverse();
-
-    for (let i = 0; i < SliderBreakPointsKeys.length; i++) {
-      if (SliderBreakPointsKeys[i] >= window.innerWidth) {
-        this.CountOfShowSlides =
-          this.BreakPoints[SliderBreakPointsKeys[i]].showSlidesCount;
+      if (showSlides == undefined) {
+        showSlides = BreakPoints.default.showSlidesCount;
       }
-    }
 
-    if (this.CountOfShowSlides == undefined) {
-      this.CountOfShowSlides = this.BreakPoints.default.showSlidesCount;
-    }
-
-    let SliderScrollWidth =
-      this.SliderObject.querySelector(".slider__inner").scrollWidth;
-    this.SlidesSideMargins = parseInt(
+      return showSlides;
+    },
+    sliderScrollWidth: SliderInner.scrollWidth,
+    slideWidth: function () {
+      return SliderInner.offsetWidth / this.showSlidesCount();
+    },
+    slideMargins: parseInt(
       window
-        .getComputedStyle(this.SliderObject.querySelectorAll(".slide")[0], null)
+        .getComputedStyle(SlidesList[0], null)
         .getPropertyValue("margin")
         .split(" ")[1]
         .match(/\d+/)
-    );
+    ),
+    isAnimated: false,
+    isScrollable: false,
+  };
 
-    this.SlideWidth =
-      this.SliderObject.querySelector(".slider__inner").offsetWidth /
-      this.CountOfShowSlides;
+  main();
 
-    this.SliderObject.querySelectorAll(".slide").forEach((slide) => {
-      slide.style.cssText += `min-width: ${
-        this.SlideWidth - this.SlidesSideMargins * 2
-      }px`;
+  function main() {
+    window.addEventListener("load", () => {
+      setSlidesSettings();
+
+      // Сролл слайдера при клике на кнопки
+      SwitchBtns.btnLeft.onclick = () => {
+        if (def.isAnimated) return;
+        def.sliderOffset++;
+        scrollSlides();
+      };
+      SwitchBtns.btnRight.onclick = () => {
+        if (def.isAnimated) return;
+        def.sliderOffset--;
+        scrollSlides();
+      };
+
+      // Сролл слайдера при свайпе
+      SliderInner.addEventListener("touchstart", sliderTouchStart, false);
     });
-
-    // Выбираем все слайды
-    this.AllSlides = this.SliderObject.querySelectorAll(
-      ".slides > .slider__inner .slide:not(.clone-slide)"
-    );
-
-    // Выбираем все слайды которые были склонированны
-    this.CloneSlides = this.SliderObject.querySelectorAll(
-      ".slides > .slider__inner .clone-slide"
-    );
-
-    if (this.SlidesOffset == undefined) {
-      this.SlidesOffset = -this.CountOfShowSlides;
-
-      this.SliderObject.querySelector(
-        ".slider__inner"
-      ).style.cssText = `transition: 0s;transform: translate(${
-        this.SlideWidth * this.SlidesOffset
-      }px)`;
-
-      setTimeout(() => {
-        this.SliderObject.querySelector(
-          ".slider__inner"
-        ).style.cssText = `transform: translate(${
-          this.SlideWidth * this.SlidesOffset
-        }px)`;
-      });
-      console.log(this.SlidesOffset);
-    } else {
-      if (!this.isScrollable) {
-        this.SlidesOffset = -this.CountOfShowSlides;
-      }
-
-      this.SliderObject.querySelector(
-        ".slider__inner"
-      ).style.cssText = `transition: 0s;transform: translate(${
-        this.SlideWidth * this.SlidesOffset
-      }px)`;
-
-      setTimeout(() => {
-        this.SliderObject.querySelector(
-          ".slider__inner"
-        ).style.cssText = `transform: translate(${
-          this.SlideWidth * this.SlidesOffset
-        }px)`;
-      });
-    }
+    window.addEventListener("resize", () => {
+      setSlidesSettings();
+    });
   }
 
-  cloneSlides() {
-    this.CloneSlides.forEach((elem) => {
-      elem.remove();
+  function setSlidesSettings() {
+    SlidesList.forEach((slide) => {
+      slide.style.minWidth = `${def.slideWidth() - def.slideMargins * 2}px`;
     });
 
+    if (
+      window
+        .getComputedStyle(SliderInner, null)
+        .getPropertyValue("transform") == "none"
+    ) {
+      def.sliderOffset = -def.showSlidesCount();
+      SliderInner.style.transform = `translate3d(${
+        def.slideWidth() * def.sliderOffset
+      }px, 0px, 0px)`;
+    } else {
+      if (!def.isScrollable) {
+        def.sliderOffset = -def.showSlidesCount();
+      }
+      SliderInner.style.transform = `translate3d(${
+        def.slideWidth() * def.sliderOffset
+      }px, 0px, 0px)`;
+    }
+
+    setActiveSlides();
+    checkToChangeSlides();
+    cloneSlides();
+  }
+
+  function scrollSlides() {
+    def.isScrollable = true;
+    def.isAnimated = true;
+
+    SliderInner.style.transition = SliderTransitionString;
+    SliderInner.style.transform = `translate3d(${
+      def.slideWidth() * def.sliderOffset
+    }px, 0px, 0px)`;
+
+    SliderInner.addEventListener("transitionend", () => {
+      SliderInner.style.transition = "";
+      def.isAnimated = false;
+      setActiveSlides();
+      checkToChangeSlides();
+    });
+  }
+
+  function cloneSlides() {
+    let CloneSlides = SliderObject.querySelectorAll(
+      ".slides > .slider__inner .clone-slide"
+    );
+    CloneSlides.forEach((elem) => {
+      elem.remove();
+    });
     // Отделяем кол-во нужных первых слайдов
-    let firstSlides = Array.from(this.AllSlides).slice(
-      0,
-      this.CountOfShowSlides
-    );
-
+    let firstSlides = Array.from(SlidesList).slice(0, def.showSlidesCount());
     // Отделяем кол-во нужных последних слайдов
-    let lastSlides = Array.from(this.AllSlides).slice(
-      this.AllSlides.length - this.CountOfShowSlides
+    let lastSlides = Array.from(SlidesList).slice(
+      SlidesList.length - def.showSlidesCount()
     );
-
     lastSlides.reverse().forEach((elem) => {
       let cloneSlide = elem.cloneNode(true);
       cloneSlide.classList.add("clone-slide");
-
-      this.SliderObject.querySelector(".slider__inner").prepend(cloneSlide);
+      SliderInner.prepend(cloneSlide);
     });
-
     firstSlides.forEach((elem) => {
       let cloneSlide = elem.cloneNode(true);
       cloneSlide.classList.add("clone-slide");
-
-      this.SliderObject.querySelector(".slider__inner").append(cloneSlide);
+      SliderInner.append(cloneSlide);
     });
   }
 
-  SwitchFromCloneSlides() {
-    let ActiveSlides = this.SliderObject.querySelectorAll(
-      ".slides > .slider__inner .slide--active"
-    );
-
-    let isEvent = false;
-
-    ActiveSlides.forEach((elem) => {
-      if (elem.classList.contains("clone-slide")) {
-        isEvent = true;
-      } else {
-        isEvent = false;
-      }
-    });
-
-    if (isEvent) {
-      this.isEvent = true;
-
-      if (this.SlidesOffset == 0) {
-        this.SlidesOffset = -(
-          this.SliderObject.querySelectorAll(".slides > .slider__inner .slide")
-            .length -
-          this.CountOfShowSlides * 2
-        );
-
-        this.SliderObject.querySelector(
-          ".slider__inner"
-        ).style.cssText = `transition: 0s;transform: translate(${
-          this.SlideWidth * this.SlidesOffset
-        }px)`;
-
-        setTimeout(() => {
-          this.SliderObject.querySelector(
-            ".slider__inner"
-          ).style.cssText = `transform: translate(${
-            this.SlideWidth * this.SlidesOffset
-          }px)`;
-        });
-      } else if (
-        (Math.abs(this.SlidesOffset) == 
-        this.SliderObject.querySelectorAll(".slides > .slider__inner .slide")
-          .length - this.CountOfShowSlides)
-      ) {
-        this.SlidesOffset = -this.CountOfShowSlides;
-
-        this.SliderObject.querySelector(
-          ".slider__inner"
-        ).style.cssText = `transition: 0s;transform: translate(${
-          this.SlideWidth * this.SlidesOffset
-        }px)`;
-
-        setTimeout(() => {
-          this.SliderObject.querySelector(
-            ".slider__inner"
-          ).style.cssText = `transform: translate(${
-            this.SlideWidth * this.SlidesOffset
-          }px)`;
-        });
-      }
-
-      this.SliderObject.querySelector(".slider__inner").ontransitionend =
-        () => {
-          this.isEvent = false;
-        };
-    }
-  }
-
-  setActiveClasses() {
-    // Выбираем все которые не были клонированны
-    const Slides = this.SliderObject.querySelectorAll(
-      ".slides > .slider__inner .slide"
-    );
+  function setActiveSlides() {
+    // Выбираем все слайды
+    const Slides = SliderInner.querySelectorAll(".slide");
 
     // Удаляем статус "active" у всех слайдов
     Slides.forEach((elem) => {
@@ -296,78 +161,139 @@ export default class N_Slider {
 
     // Добавляем первому количеству слайдов статус "active"
     for (
-      let i = Math.abs(this.SlidesOffset);
-      i < Math.abs(this.SlidesOffset) + this.CountOfShowSlides;
+      let i = Math.abs(def.sliderOffset);
+      i < Math.abs(def.sliderOffset) + def.showSlidesCount();
       i++
     ) {
       Slides[i].classList.add("slide--active");
     }
   }
 
-  ScrollSlides() {
-    this.isScrollable = true;
-    this.isEvent = true;
+  function checkToChangeSlides() {
+    let ActiveSlides = SliderInner.querySelectorAll(".slide--active");
 
-    this.SliderObject.querySelector(
-      ".slider__inner"
-    ).style.cssText = `transform: translate(${
-      this.SlideWidth * this.SlidesOffset
-    }px)`;
+    let isEvent = false;
 
-    this.SliderObject.querySelector(".slider__inner").ontransitionend = () => {
-      this.isEvent = false;
-    };
+    for (let i = 0; i < ActiveSlides.length; i++) {
+      if (ActiveSlides[i].classList.contains("clone-slide")) {
+        isEvent = true;
+      } else {
+        isEvent = false;
+        return false;
+      }
+    }
+
+    def.isAnimated = true;
+
+    if (isEvent) {
+      if (Math.abs(def.sliderOffset) == 0) {
+        def.sliderOffset = -(
+          SliderObject.querySelectorAll(".slides > .slider__inner .slide")
+            .length -
+          def.showSlidesCount() * 2
+        );
+
+        SliderInner.style.transition = "";
+        SliderInner.style.transform = `translate3d(${
+          def.slideWidth() * def.sliderOffset
+        }px, 0px, 0px)`;
+        def.isAnimated = false;
+      } else if (
+        Math.abs(def.sliderOffset) ==
+        SliderObject.querySelectorAll(".slides > .slider__inner .slide")
+          .length -
+          def.showSlidesCount()
+      ) {
+        def.sliderOffset = -def.showSlidesCount();
+        SliderInner.style.transition = "";
+        SliderInner.style.transform = `translate3d(${
+          def.slideWidth() * def.sliderOffset
+        }px, 0px, 0px)`;
+        def.isAnimated = false;
+      }
+      return true;
+    }
+    return false;
   }
 
-  SwipeSlidesStart(event) {
-    this.TouchStart = event.touches[0];
+  let sliderTouchStart = function (event) {
+    if (def.isAnimated) return;
 
-    this.SlidesTransformX = parseFloat(
+    def.swipeStartX = event.targetTouches[0].clientX;
+
+    def.sliderTransformX = parseFloat(
       window
-        .getComputedStyle(
-          this.SliderObject.querySelector(".slider__inner"),
-          null
-        )
+        .getComputedStyle(SliderObject.querySelector(".slider__inner"), null)
         .getPropertyValue("transform")
         .split(",")[4]
     );
 
-    this.SliderObject.querySelector(
-      ".slider__inner"
-    ).style.cssText += `transition: 0s;`;
+    SliderInner.addEventListener("touchmove", sliderTouchMove, false);
+    SliderInner.addEventListener("touchend", sliderTouchEnd, false);
+  };
 
-    this.TouchStartX = this.TouchStart.clientX;
-  }
+  let sliderTouchMove = function (event) {
+    def.swipeMoveX = parseFloat(
+      (def.swipeStartX - event.targetTouches[0].clientX).toFixed(2)
+    );
 
-  SwipeSlides(event) {
-    this.TouchMove = event.touches[0];
-
-    this.TouchMoveX = this.TouchStartX - this.TouchMove.clientX;
-
-    if (Math.abs(this.TouchMoveX) < Math.abs(this.SlideWidth)) {
-      this.SliderObject.querySelector(
-        ".slider__inner"
-      ).style.cssText += `transform: translateX(${
-        this.SlidesTransformX - this.TouchMoveX
-      }px)`;
+    if (Math.abs(def.swipeMoveX) < Math.abs(def.slideWidth())) {
+      SliderInner.style.transform = `translate3d(${
+        def.sliderTransformX - def.swipeMoveX
+      }px, 0, 0)`;
     }
-  }
 
-  SwipeSlidesEnd() {
-    this.isScrollable = true;
+    def.isAnimated = true;
+    event.preventDefault();
+  };
 
-    if (Math.abs(this.TouchMoveX) > this.SlideWidth / 4) {
-      if (this.TouchMoveX < 0) {
-        this.SlidesOffset++;
+  let sliderTouchEnd = function () {
+    def.isScrollable = true;
+
+    if (Math.abs(def.swipeMoveX - def.swipeStartX) < 40) return;
+
+    if (Math.abs(def.swipeMoveX) > def.slideWidth() / 4) {
+      if (def.swipeMoveX < 0) {
+        def.sliderOffset++;
       } else {
-        this.SlidesOffset--;
+        def.sliderOffset--;
       }
+      SliderInner.style.transition = `${SliderTransitionString}`;
+      SliderInner.style.transform = `translate3d(${
+        def.slideWidth() * def.sliderOffset
+      }px, 0, 0)`;
+      SliderInner.setAttribute("data-is-animating", true);
+    } else {
+      SliderInner.style.transition = `${SliderTransitionString}`;
+      SliderInner.style.transform = `translate3d(${
+        def.slideWidth() * def.sliderOffset
+      }px, 0, 0)`;
     }
 
-    this.SliderObject.querySelector(
-      ".slider__inner"
-    ).style.cssText = `transform: translateX(${
-      this.SlideWidth * this.SlidesOffset
-    }px)`;
-  }
+    SliderObject.querySelector(".slider__inner").removeEventListener(
+      "touchmove",
+      sliderTouchMove,
+      false
+    );
+
+    SliderObject.querySelector(".slider__inner").removeEventListener(
+      "touchend",
+      sliderTouchEnd,
+      false
+    );
+
+    setTimeout(() => {
+      SliderInner.style.transition = "";
+
+      delete def.swipeStartX;
+      delete def.swipeMoveX;
+
+      def.isAnimated = false;
+
+      SliderInner.setAttribute("data-is-animating", false);
+
+      setActiveSlides();
+      checkToChangeSlides();
+    }, SliderTransition.seconds);
+  };
 }
