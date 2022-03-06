@@ -1,4 +1,3 @@
-import N from "./Slider.js";
 import N_Slider from "./Slider.js";
 
 const Slider = document.querySelector(".slider");
