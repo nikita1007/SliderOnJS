@@ -74,6 +74,7 @@ export default function N_Slider(object, settings) {
 
       // Сролл слайдера при свайпе
       SliderInner.addEventListener("touchstart", sliderTouchStart, false);
+      SliderInner.addEventListener("mousedown", sliderTouchStart, false);
     });
     window.addEventListener("resize", () => {
       setSlidesSettings();
@@ -219,7 +220,8 @@ export default function N_Slider(object, settings) {
   let sliderTouchStart = function (event) {
     if (def.isAnimated) return;
 
-    def.swipeStartX = event.targetTouches[0].clientX;
+    def.swipeStartX =
+      event.type == "touchstart" ? event.targetTouches[0].clientX : event.clientX;
 
     def.sliderTransformX = parseFloat(
       window
@@ -229,13 +231,18 @@ export default function N_Slider(object, settings) {
     );
 
     SliderInner.addEventListener("touchmove", sliderTouchMove, false);
+    SliderInner.addEventListener("mousemove", sliderTouchMove, false);
     SliderInner.addEventListener("touchend", sliderTouchEnd, false);
+    SliderInner.addEventListener("mouseup", sliderTouchEnd, false);
   };
 
   let sliderTouchMove = function (event) {
-    def.swipeMoveX = parseFloat(
-      (def.swipeStartX - event.targetTouches[0].clientX).toFixed(2)
-    );
+    def.swipeMoveX =
+      event.type == "touchmove"
+        ? parseFloat(
+            (def.swipeStartX - event.targetTouches[0].clientX).toFixed(2)
+          )
+        : def.swipeStartX - event.clientX;
 
     if (Math.abs(def.swipeMoveX) < Math.abs(def.slideWidth())) {
       SliderInner.style.transform = `translate3d(${
@@ -278,6 +285,18 @@ export default function N_Slider(object, settings) {
 
     SliderObject.querySelector(".slider__inner").removeEventListener(
       "touchend",
+      sliderTouchEnd,
+      false
+    );
+
+    SliderObject.querySelector(".slider__inner").removeEventListener(
+      "mousemove",
+      sliderTouchMove,
+      false
+    );
+
+    SliderObject.querySelector(".slider__inner").removeEventListener(
+      "mouseup",
       sliderTouchEnd,
       false
     );
